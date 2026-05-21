@@ -2,6 +2,8 @@
 import os
 import time
 import threading
+import base64
+
 import pandas as pd
 from PIL import Image
 from werkzeug.utils import secure_filename
@@ -10,7 +12,7 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, send_file
 
 # FastAPI 相关
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File,Body
 from fastapi.responses import JSONResponse
 import uvicorn
 import lincese_plate
@@ -55,7 +57,10 @@ def upload():
 
     plate = lincese_plate.process_and_recognize(path)
     now = time.strftime("%Y-%m-%d %H:%M:%S")
-    record_list.append({"time": now, "plate": plate})
+    record_list.append({
+        "time": now,
+        "plate": "未识别到" if plate is None else plate
+    })
 
     return jsonify({"code": 200, "plate": plate, "time": now})
 
@@ -76,6 +81,7 @@ fast_app = FastAPI(title="车牌识别系统")
 
 @fast_app.post("/api/plate/recognize")
 async def recognize_api(file: UploadFile = File(...)):
+    global save_path
     try:
         filename = secure_filename(file.filename)
         save_path = os.path.join(UPLOAD_FOLDER, filename)
@@ -84,6 +90,40 @@ async def recognize_api(file: UploadFile = File(...)):
         content = await file.read()
         with open(save_path, "wb") as f:
             f.write(content)
+
+        resize_image(save_path)
+        plate = lincese_plate.process_and_recognize(save_path)
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        record_list.append({"time": now, "plate": plate})
+        if save_path and os.path.exists(save_path):
+            os.remove(save_path)
+
+        return {
+            "code": 200,
+            "msg": "识别成功",
+            "plate_number": '未检测到车牌，请检查图片' if plate is None else plate,
+            "time": now
+        }
+    except Exception as e:
+        return {"code": 500, "msg": f"错误：{str(e)}", "plate_number": None}
+    finally:
+        if save_path and os.path.exists(save_path):
+            os.remove(save_path)
+
+@fast_app.post("/api/plate/recognize2")
+async def recognize_api(base64_image: str = Body(..., embed=True)):
+    save_path = None
+    try:
+        if ',' in base64_image:
+            base64_image = base64_image.split(',')[1]
+
+        image_data = base64.b64decode(base64_image)
+
+        filename = f"plate_{int(time.time())}.png"
+        save_path = os.path.join(UPLOAD_FOLDER, filename)
+
+        with open(save_path, "wb") as f:
+            f.write(image_data)
 
         resize_image(save_path)
         plate = lincese_plate.process_and_recognize(save_path)
@@ -98,6 +138,9 @@ async def recognize_api(file: UploadFile = File(...)):
         }
     except Exception as e:
         return {"code": 500, "msg": f"错误：{str(e)}", "plate_number": None}
+    finally:
+        if save_path and os.path.exists(save_path):
+            os.remove(save_path)
 
 # ====================== 一键启动双服务 ======================
 def run_flask():
