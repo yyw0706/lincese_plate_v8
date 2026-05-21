@@ -1,8 +1,4 @@
 # @Auther   :Mateo
-# ==============================================
-# 一体化服务：Flask网页 + FastAPI异地接口
-# 运行一个文件即可同时启动两个服务
-# ==============================================
 import os
 import time
 import threading
@@ -17,8 +13,6 @@ from flask import Flask, render_template, request, jsonify, send_file
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import uvicorn
-
-# 导入你的识别文件 A.py
 import lincese_plate
 
 # ====================== 全局配置 ======================
@@ -40,7 +34,7 @@ def resize_image(image_path, target_height=400):
     except:
         pass
 
-# ====================== 【服务1】Flask 网页服务 ======================
+# ====================== Flask 网页服务 ======================
 flask_app = Flask(__name__)
 flask_app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
@@ -77,7 +71,7 @@ def download():
     df.to_excel(save_path, index=False)
     return send_file(save_path, as_attachment=True)
 
-# ====================== 【服务2】FastAPI 异地接口 ======================
+# ====================== FastAPI 异地接口 ======================
 fast_app = FastAPI(title="车牌识别系统")
 
 @fast_app.post("/api/plate/recognize")
